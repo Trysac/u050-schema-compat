@@ -19,6 +19,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+schema-compat = "schema_compat.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/Trysac/u050-schema-compat"
 Source = "https://github.com/Trysac/u050-schema-compat"

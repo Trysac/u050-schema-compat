@@ -8,8 +8,11 @@ Detect breaking changes between two JSON Schema versions of an event under backw
 
 ## Problem
 
-Describe in two or three sentences the concrete problem this utility solves, who hits it, and what
-they do today without it. Replace this paragraph when the first real feature lands.
+Event producers change JSON Schemas and break consumers in production because nobody checks
+compatibility in CI. Schema registries do this for Avro and Protobuf, but plain JSON Schema events
+usually have no gate, and naive diffs confuse annotations such as `default` with validation. This
+CLI compares two schema versions with explicit validation semantics, classifies each change and
+fails the build on incompatible ones.
 
 ## Install
 
@@ -24,17 +27,56 @@ Requires Python 3.10 or newer. No runtime dependencies.
 ## Usage
 
 ```python
-import schema_compat
+from pathlib import Path
 
-# normalize() trims surrounding whitespace and lower-cases the text.
-print(schema_compat.normalize("  Hello World "))  # -> "hello world"
+from schema_compat import Mode, diff, is_compatible, load_schema, render
 
-# Blank input is rejected explicitly instead of returning an empty string.
-try:
-    schema_compat.normalize("   ")
-except ValueError as exc:
-    print(f"rejected: {exc}")
+old = load_schema(Path("old.json"))
+new = load_schema(Path("new.json"))
+changes = diff(old, new, Mode.FULL)
+print(render(changes, "text"))
+raise SystemExit(0 if is_compatible(changes, strict=True) else 1)
 ```
+
+```sh
+schema-compat OLD.json NEW.json --mode full --strict --format json
+```
+
+Options: `--mode backward|forward|full` (default backward), `--strict`, `--format text|json`.
+Text lines look like `<SEVERITY> <path> <kind>: <detail>`. JSON output is an array of objects with
+keys `path`, `kind`, `severity`, `direction`, `detail`, sorted by `(path, kind)`.
+
+### Exit codes
+
+- `0`: compatible (UNKNOWN findings fail only with `--strict`)
+- `1`: breaking for the selected mode
+- `2`: invalid JSON, input too large, nesting too deep, unsupported `$ref` or other errors
+
+## Semantics
+
+A change is BREAKING for a direction when some instance valid under the writer schema is invalid
+under the reader schema. BACKWARD: reader = new, writer = old. FORWARD: reader = old, writer = new.
+FULL checks both; each change carries the direction that breaks.
+
+`default`, `title`, `description` and `examples` are annotations and never affect compatibility.
+
+Assumption: properties not declared in an open object (`additionalProperties` absent or `true`) are
+assumed absent in real data.
+
+### Supported subset (drafts 07 and 2020-12)
+
+`type`, `properties`, `required`, `additionalProperties`, `items` (single schema), `enum`, `const`,
+`minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum` (numeric form), `minLength`,
+`maxLength`, `minItems`, `maxItems`, local `$ref` (`#` or `#/...` pointers) and boolean schemas.
+Other keywords (`oneOf`, `anyOf`, `if/then/else`, `patternProperties`, `dependentSchemas`,
+`prefixItems`) are reported as `unsupported_keyword` with severity UNKNOWN when they differ,
+including when a `$ref` inside them points to a changed definition.
+
+### Change kinds
+
+`property_added`, `property_removed`, `required_added`, `required_removed`, `type_changed`,
+`enum_changed`, `constraint_changed`, `additional_properties_changed`, `schema_changed`,
+`unsupported_keyword`.
 
 ## Documentation
 
