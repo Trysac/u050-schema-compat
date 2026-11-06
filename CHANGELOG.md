@@ -9,4 +9,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add `schema-compat`: detect breaking changes between two JSON Schema versions under backward, forward or full compatibility, with JSON pointer paths, a `diff` API and a CLI with text and JSON output.
 - Initial project structure from the factory utility template.
